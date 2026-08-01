@@ -1,16 +1,50 @@
 from agents.main_agent import Agent
 from agents.client import client
 
-class GoogleCalenderAgent(Agent):
-    def __init__(self, role, job, output_format, response=""):
-        super().__init__(role, job, output_format, response)
+import os.path
+import datetime as dt
 
-    def assign_action(self, user_prompt):
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.errors import HttpError
+from googleapiclient.discovery import build
+
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+
+def create_service():
+    creds = None
+
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json')
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+
+        else:
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+
+    temp_service = build('calendar', 'v3', credentials=creds)
+    return temp_service
+
+
+class GoogleCalenderAgent(Agent):
+    def __init__(self, role, job, service, output_format, response=""):
+        super().__init__(role, job, output_format, response)
+        self.service = create_service()
+
+    def assign_action(self, prompt):
         final_prompt = f"""
             Role: {self.role}
             Job: Determine the action needed to complete this event
-            Output Format: {self.output_format}
-            User Prompt: {user_prompt}
+            Output: 
+                One value from the following list -- [get-next-event, create-event]
+            User Prompt: {prompt}
         """
 
         self.response = client.responses.create(
@@ -20,9 +54,15 @@ class GoogleCalenderAgent(Agent):
 
         print(self.response.output_text.lower())
 
-        if "schedule a meeting" in self.response.output_text.lower():
-            print("Has Meeting")
-            self.create_meeting()
+        if "create-event" in self.response.output_text.lower():
+            print("Will create an event")
 
-    def create_meeting(self):
-        print(f"Meeting created")
+        elif "get-next-event" in self.response.output_text.lower():
+            print("Will get the next event")
+
+
+    def get_next_event(self):
+        pass
+
+    def create_event(self):
+        pass
