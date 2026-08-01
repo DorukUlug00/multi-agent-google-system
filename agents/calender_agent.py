@@ -38,6 +38,7 @@ class GoogleCalenderAgent(Agent):
         super().__init__(role, job, output_format, response)
         self.service = create_service()
 
+
     def assign_action(self, prompt):
         final_prompt = f"""
             Role: {self.role}
@@ -63,18 +64,47 @@ class GoogleCalenderAgent(Agent):
 
 
     def get_next_event(self):
-        now = dt.datetime.now().isoformat() + "Z"
+        try:
+            now = dt.datetime.now().isoformat() + "Z"
 
-        event_result = self.service.events().list(calendarId='primary', timeMin=now, maxResults=1, singleEvents=True).execute()
-        event = event_result.get("items")
+            event_result = self.service.events().list(calendarId='primary', timeMin=now, maxResults=1, singleEvents=True).execute()
+            event = event_result.get("items")
 
-        if not event:
-            print("No upcoming events found.")
-            return
-        else:
-            print(event)
-            start = event[0]["start"].get("date")
-            print(start, event[0]["summary"])
+            if not event:
+                print("No upcoming events found.")
+                return
+            else:
+                print(event)
+                start = event[0]["start"].get("date")
+                print(start, event[0]["summary"])
+
+        except HttpError as error:
+            print('An error occurred: %s' % error)
 
     def create_event(self):
-        pass
+        try:
+            event = {
+                "summary": "Meeting with Clients",
+                "location": "Singapore",
+                "description": "Talking about future deals",
+                "start": {
+                    "dateTime": "2026-06-06T09:00:00+02:00",
+                    "timeZone": "Europe/Prague",
+                },
+                "end": {
+                    "dateTime": "2026-06-06T10:00:00+02:00",
+                    "timeZone": "Europe/Prague",
+                },
+                "recurrence": [
+
+                ],
+                "attendees": [
+                    {"email": "ulugdoruk@gmail.com", "name": "Doruk Ulug"},
+                ]
+            }
+
+            event = self.service.events().insert(calendarId='primary', body=event).execute()
+            print(f"Event created {event.get('htmlLink')}")
+
+        except HttpError as error:
+            print('An error occurred: %s' % error)
