@@ -60,14 +60,24 @@ class GoogleCalenderAgent(Agent):
 
         elif "get-next-event" in self.response.output_text.lower():
             print("Will get the next event")
-            self.get_next_event()
+            min_time = dt.datetime.today()
+            max_time = dt.datetime.today() + dt.timedelta(days=1)
+            max_results = 2
+            self.get_next_event(min_time, max_time, max_results)
 
 
-    def get_next_event(self):
+    def get_next_event(self, min_time, max_time, max_results):
         try:
-            now = dt.datetime.now().isoformat() + "Z"
+            if not min_time:
+                min_time = dt.datetime.now().isoformat() + "Z"
 
-            event_result = self.service.events().list(calendarId='primary', timeMin=now, maxResults=1, singleEvents=True).execute()
+            if not max_time:
+                max_time = float('inf')
+
+            if not max_results:
+                max_results = 1
+
+            event_result = self.service.events().list(calendarId='primary', timeMin=min_time, timeMax=max_time, maxResults=max_results, singleEvents=True).execute()
             event = event_result.get("items")
 
             if not event:
@@ -80,6 +90,7 @@ class GoogleCalenderAgent(Agent):
 
         except HttpError as error:
             print('An error occurred: %s' % error)
+
 
     def create_event(self):
         try:
