@@ -34,7 +34,7 @@ def create_service():
 
 
 class GoogleCalenderAgent(Agent):
-    def __init__(self, role, job, service, output_format, response=""):
+    def __init__(self, role, job, output_format, response=""):
         super().__init__(role, job, output_format, response)
         self.service = create_service()
 
@@ -59,10 +59,22 @@ class GoogleCalenderAgent(Agent):
 
         elif "get-next-event" in self.response.output_text.lower():
             print("Will get the next event")
+            self.get_next_event()
 
 
     def get_next_event(self):
-        pass
+        now = dt.datetime.now().isoformat() + "Z"
+
+        event_result = self.service.events().list(calendarId='primary', timeMin=now, maxResults=1, singleEvents=True).execute()
+        event = event_result.get("items")
+
+        if not event:
+            print("No upcoming events found.")
+            return
+        else:
+            print(event)
+            start = event[0]["start"].get("date")
+            print(start, event[0]["summary"])
 
     def create_event(self):
         pass
