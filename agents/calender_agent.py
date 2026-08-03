@@ -84,6 +84,9 @@ class GoogleCalenderAgent(Agent):
             - Use timeZone "Europe/Prague" unless the user specifies otherwise.
             - recurrence uses RRULE strings, e.g. ["RRULE:FREQ=WEEKLY;COUNT=10"]; leave null if not recurring.
             - attendees: extract any emails/names mentioned; leave null if none.
+            
+            For delete-event:
+            - Fill time_min/time_max only if the user gives a range; otherwise leave null.
         
             Leave every field not relevant to the chosen action as null.
         
@@ -103,6 +106,10 @@ class GoogleCalenderAgent(Agent):
         elif "get-next-event" in self.response.output_text.lower():
             print("Will get the next event")
             self.get_next_event(self.response.output_parsed)
+
+        elif "delete-event" in self.response.output_text.lower():
+            print("Will delete the event")
+            self.delete_event(self.response.output_parsed)
 
 
     def get_next_event(self, output):
@@ -128,10 +135,17 @@ class GoogleCalenderAgent(Agent):
 
             if not events:
                 print("No upcoming events found.")
-                return
+                return None
             else:
                 print("Upcoming events found.")
-                for event in events:
+                if len(events) == 1:
+                    event = events[0]
+                    print(event)
+                    start = event["start"].get("dateTime", event["start"].get("date"))
+                    print(start, event["summary"])
+                    return events[0]["id"]
+
+            for event in events:
                     print(event)
                     start = event["start"].get("dateTime", event["start"].get("date"))
                     print(start, event["summary"])
@@ -164,6 +178,17 @@ class GoogleCalenderAgent(Agent):
 
             event = self.service.events().insert(calendarId='primary', body=event).execute()
             print(f"Event created {event.get('htmlLink')}")
+
+        except HttpError as error:
+            print('An error occurred: %s' % error)
+
+    def delete_event(self, output):
+        try:
+            identifier = self.get_next_event(output)
+
+            event = self.service.events().delete(calendarId='primary', eventId=identifier).execute()
+
+            return event[0]["summary"]
 
         except HttpError as error:
             print('An error occurred: %s' % error)
