@@ -64,37 +64,29 @@ class GoogleCalenderAgent(Agent):
         super().__init__(role, job, output_format, response)
         self.service = create_service()
 
-
     def assign_action(self, prompt):
         final_prompt = f"""
             Role: {self.role}
-            Job: Determine the action needed to complete this event
-            Output: 
-                {{
-                    action: One value from the following list -- [get-next-event, create-event],
-                    # if action == get-next-event
-                    time_min: find it from context
-                    time_max: find it from context
-                    max_results: find it from context
-                    # if action == create-event
-                    summary: find it from context,
-                    location: find it from context,
-                    description: find it from context,
-                    start: {
-                        "dateTime": find it from context,
-                        "timeZone": "Europe/Prague",
-                    },
-                    end: {
-                        "dateTime": find it from context,
-                        "timeZone": "Europe/Prague",
-                    },
-                    recurrence: [
-                        find it from context
-                    ],
-                    attendees: [
-                        {"email": find it from context, "name": find it from context},
-                    ]
-                }}
+            Task: Read the user prompt and produce a structured Google Calendar action.
+        
+            Rules:
+            - Choose `action`: "get-next-event" to read/list events, "create-event" to make one.
+            - All datetimes must be RFC3339 with a UTC offset, e.g. 2026-08-03T09:00:00+02:00.
+            - Today is {dt.datetime.now(dt.timezone.utc).isoformat()}. Resolve relative dates ("tomorrow", "next Monday") against it.
+        
+            For get-next-event:
+            - Fill time_min/time_max only if the user gives a range; otherwise leave null.
+            - Set max_results if the user asks for a count (e.g. "my next 3 events"), else null.
+        
+            For create-event:
+            - Fill summary, location, description, start, end from the prompt.
+            - If no end time is given, default end to one hour after start.
+            - Use timeZone "Europe/Prague" unless the user specifies otherwise.
+            - recurrence uses RRULE strings, e.g. ["RRULE:FREQ=WEEKLY;COUNT=10"]; leave null if not recurring.
+            - attendees: extract any emails/names mentioned; leave null if none.
+        
+            Leave every field not relevant to the chosen action as null.
+        
             User Prompt: {prompt}
         """
 
@@ -106,6 +98,7 @@ class GoogleCalenderAgent(Agent):
 
         if "create-event" in self.response.output_text.lower():
             print("Will create an event")
+            self.create_event(self.response.output_parsed)
 
         elif "get-next-event" in self.response.output_text.lower():
             print("Will get the next event")
@@ -147,25 +140,25 @@ class GoogleCalenderAgent(Agent):
             print('An error occurred: %s' % error)
 
 
-    def create_event(self):
+    def create_event(self, output):
         try:
             event = {
-                "summary": "Meeting with Clients",
-                "location": "Singapore",
-                "description": "Talking about future deals",
+                "summary": output.summary,
+                "location": output.location,
+                "description": output.description,
                 "start": {
-                    "dateTime": "2026-06-06T09:00:00+02:00",
-                    "timeZone": "Europe/Prague",
+                    "dateTime": output.start.dateTime,
+                    "timeZone": output.start.timeZone,
                 },
                 "end": {
-                    "dateTime": "2026-06-06T10:00:00+02:00",
-                    "timeZone": "Europe/Prague",
+                    "dateTime": output.end.dateTime,
+                    "timeZone": output.end.timeZone,
                 },
                 "recurrence": [
-
+                    output.recurrence
                 ],
                 "attendees": [
-                    {"email": "ulugdoruk@gmail.com", "name": "Doruk Ulug"},
+                    output.attendees
                 ]
             }
 
