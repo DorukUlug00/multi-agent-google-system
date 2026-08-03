@@ -35,11 +35,28 @@ def create_service():
     return temp_service
 
 
+class EventDateTime(BaseModel):
+    dateTime: str | None = None
+    timeZone: str = "Europe/Prague"
+
+class Attendee(BaseModel):
+    email: str
+    name: str | None = None
+
 class CalendarLLMOutputFormatter(BaseModel):
-    action: str
-    time_min: str | None = dt.datetime.now(dt.timezone.utc).isoformat()
-    time_max: str | None
-    max_results: int | None
+    action: str  # "get-next-event" or "create-event"
+    # get-next-event
+    time_min: str | None = None
+    time_max: str | None = None
+    max_results: int | None = None
+    # create-event
+    summary: str | None = None
+    location: str | None = None
+    description: str | None = None
+    start: EventDateTime | None = None
+    end: EventDateTime | None = None
+    recurrence: list[str] | None = None
+    attendees: list[Attendee] | None = None
 
 
 class GoogleCalenderAgent(Agent):
@@ -60,7 +77,23 @@ class GoogleCalenderAgent(Agent):
                     time_max: find it from context
                     max_results: find it from context
                     # if action == create-event
-                    # add nothing
+                    summary: find it from context,
+                    location: find it from context,
+                    description: find it from context,
+                    start: {
+                        "dateTime": find it from context,
+                        "timeZone": "Europe/Prague",
+                    },
+                    end: {
+                        "dateTime": find it from context,
+                        "timeZone": "Europe/Prague",
+                    },
+                    recurrence: [
+                        find it from context
+                    ],
+                    attendees: [
+                        {"email": find it from context, "name": find it from context},
+                    ]
                 }}
             User Prompt: {prompt}
         """
