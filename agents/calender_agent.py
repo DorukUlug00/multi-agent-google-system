@@ -1,3 +1,5 @@
+from pydantic import BaseModel
+
 from agents.main_agent import Agent
 from agents.client import client
 
@@ -33,6 +35,13 @@ def create_service():
     return temp_service
 
 
+class CalendarLLMOutputFormatter(BaseModel):
+    action: str
+    time_min: str | None = dt.datetime.now(dt.timezone.utc).isoformat()
+    time_max: str | None
+    max_results: int | None
+
+
 class GoogleCalenderAgent(Agent):
     def __init__(self, role, job, output_format, response=""):
         super().__init__(role, job, output_format, response)
@@ -44,49 +53,62 @@ class GoogleCalenderAgent(Agent):
             Role: {self.role}
             Job: Determine the action needed to complete this event
             Output: 
-                One value from the following list -- [get-next-event, create-event]
+                {{
+                    action: One value from the following list -- [get-next-event, create-event],
+                    # if action == get-next-event
+                    time_min: find it from context
+                    time_max: find it from context
+                    max_results: find it from context
+                    # if action == create-event
+                    # add nothing
+                }}
             User Prompt: {prompt}
         """
 
-        self.response = client.responses.create(
+        self.response = client.responses.parse(
             model="gpt-4o-mini",
-            input=final_prompt
+            input=final_prompt,
+            text_format=CalendarLLMOutputFormatter
         )
-
-        print(self.response.output_text.lower())
 
         if "create-event" in self.response.output_text.lower():
             print("Will create an event")
 
         elif "get-next-event" in self.response.output_text.lower():
             print("Will get the next event")
-            min_time = dt.datetime.today()
-            max_time = dt.datetime.today() + dt.timedelta(days=1)
-            max_results = 2
-            self.get_next_event(min_time, max_time, max_results)
+            self.get_next_event(self.response.output_parsed)
 
 
-    def get_next_event(self, min_time, max_time, max_results):
+    def get_next_event(self, output):
         try:
-            if not min_time:
-                min_time = dt.datetime.now().isoformat() + "Z"
+            min_time = output.time_min
+            max_time = output.time_max
+            max_results = output.max_results
+
+            if not min_time or min_time is None:
+                print("No min time found.")
+                min_time = dt.datetime.now(dt.timezone.utc).isoformat()
 
             if not max_time:
-                max_time = float('inf')
+                max_time = None
 
             if not max_results:
                 max_results = 1
 
-            event_result = self.service.events().list(calendarId='primary', timeMin=min_time, timeMax=max_time, maxResults=max_results, singleEvents=True).execute()
-            event = event_result.get("items")
+            print("Min time: ", min_time, "of type ", type(min_time))
 
-            if not event:
+            event_result = self.service.events().list(calendarId='primary', timeMin=min_time, timeMax=max_time, maxResults=max_results, singleEvents=True, orderBy='startTime').execute()
+            events = event_result.get("items")
+
+            if not events:
                 print("No upcoming events found.")
                 return
             else:
-                print(event)
-                start = event[0]["start"].get("date")
-                print(start, event[0]["summary"])
+                print("Upcoming events found.")
+                for event in events:
+                    print(event)
+                    start = event["start"].get("dateTime", event["start"].get("date"))
+                    print(start, event["summary"])
 
         except HttpError as error:
             print('An error occurred: %s' % error)
